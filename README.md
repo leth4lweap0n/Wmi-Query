@@ -1,0 +1,2 @@
+# Wmi.Query
+ wmi query 
