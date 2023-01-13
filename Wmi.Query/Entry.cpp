@@ -6,7 +6,7 @@
 #include <string>
 
 #pragma comment(lib, "wbemuuid.lib")
-
+#define WMI_QUERY(query, prop_name_of_result_object) QueryAndPrintResult(query, prop_name_of_result_object)
 enum class e_WmiQueryError {
 	None,
 	BadQueryFailure,
@@ -20,10 +20,11 @@ enum class e_WmiQueryError {
 
 struct SWmiQueryResult
 {
-	std::vector<std::wstring> ResultList;
+	std::vector<std::string> ResultList;
 	e_WmiQueryError Error = e_WmiQueryError::None;
 	std::wstring ErrorDescription;
 };
+
 
 SWmiQueryResult GetWmiQueryResult(const std::wstring& wmi_query, const std::wstring& prop_name_of_result_object, bool allow_empty_items = false) {
 
@@ -145,10 +146,32 @@ SWmiQueryResult GetWmiQueryResult(const std::wstring& wmi_query, const std::wstr
 									retVal.ErrorDescription = L"Couldn't extract property: " + prop_name_of_result_object + L" from result of query. Error code : " + std::to_wstring(hr);
 								}
 								else {
-									BSTR val = vt_prop.bstrVal;
-									if (nullptr == val) {
+									std::string val = [](const VARIANT& v) {
+										switch (v.vt) {
+										case VT_BSTR:
+											return std::string(_bstr_t(v.bstrVal));
+										case VT_I4:
+											return std::to_string(v.intVal);
+										case VT_UI4:
+											return std::to_string(v.uintVal);
+										case VT_I8:
+											return std::to_string(v.llVal);
+										case VT_UI8:
+											return std::to_string(v.ullVal);
+										case VT_R4:
+											return std::to_string(v.fltVal);
+										case VT_R8:
+											return std::to_string(v.dblVal);
+										case VT_BOOL:
+											return std::to_string(v.boolVal);
+										default:
+											return std::string();
+										}
+									}(vt_prop);
+
+									if (val.empty()) {
 										if (allow_empty_items) {
-											retVal.ResultList.emplace_back(L"");
+											retVal.ResultList.emplace_back("");
 										}
 									}
 									else {
@@ -176,24 +199,29 @@ SWmiQueryResult GetWmiQueryResult(const std::wstring& wmi_query, const std::wstr
 	return retVal;
 }
 
-void QueryAndPrintResult(const std::wstring& query, const std::wstring& prop_name_of_result_object)
+std::vector<std::string> QueryAndPrintResult(const std::wstring& query, const std::wstring& prop_name_of_result_object)
 {
 	const SWmiQueryResult res = GetWmiQueryResult(query, prop_name_of_result_object);
 	if (res.Error != e_WmiQueryError::None) {
 		std::wcout << "Got this error while executing query: " << std::endl;
 		std::wcout << res.ErrorDescription << std::endl;
-		return;
+		return {};
 	}
-	for (const auto& item : res.ResultList) {
-		std::wcout << item << std::endl;
-	}
+	return res.ResultList;
 }
+
 
 int main(int argc, char** argv)
 {
-	QueryAndPrintResult(L"SELECT SerialNumber FROM Win32_PhysicalMedia", L"SerialNumber");
-	QueryAndPrintResult(L"SELECT ProcessorId FROM Win32_Processor", L"ProcessorId");
-	QueryAndPrintResult(L"SELECT * FROM Win32_BaseBoard ", L"SerialNumber");
+	/*const auto x = WMI_QUERY(L"SELECT SerialNumber FROM Win32_PhysicalMedia", L"SerialNumber");*/
+	const auto y = WMI_QUERY(L"SELECT * FROM Win32_Processor", L"ProcessorId");
+	const auto z = WMI_QUERY(L"SELECT * FROM Win32_BaseBoard ", L"SerialNumber");
+	std::string hwid;
+	for (auto& i : y) 
+		hwid += i;
+	for (auto& i : z) 
+		hwid += i;
+	std::cout << hwid << std::endl;
 	system("pause");
 }
 
